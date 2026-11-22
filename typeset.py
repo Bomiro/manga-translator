@@ -23,22 +23,50 @@ def _load_font(font_path, size, rtl=False):
     return ImageFont.truetype(font_path, size)
 
 
+def _ellipse_line_width(bubble_w, bubble_h, line_center_dy, pad):
+    """Width available for a text line whose centre is line_center_dy px
+    from the bubble centre: the bubble is an ELLIPSE, so lines away from
+    the middle are narrower than the full width. (Fitting to the rectangle
+    lets the first/last line's ends cross the outline.)"""
+    half_h = bubble_h / 2.0
+    dy = min(abs(line_center_dy) / half_h, 0.999)
+    half_w = (bubble_w / 2.0) * (1 - dy * dy) ** 0.5
+    return max(10.0, 2 * half_w - 2 * pad)
+
+
 def _fit_font(draw, text, box_w, box_h, font_path, max_size=48, min_size=10,
-              rtl=False):
-    """Largest font size where the wrapped text fits inside (box_w, box_h)."""
+              rtl=False, bubble=None, pad=6):
+    """Largest font size where the wrapped text fits inside the bubble.
+    bubble: (x, y, w, h) — when given, each line is checked against the
+    ELLIPSE width at that line's height, not the rectangle."""
     for size in range(max_size, min_size - 1, -2):
         font = _load_font(font_path, size, rtl=rtl)
-        words, lines, cur = text.split(), [], ""
-        for w in words:
-            trial = (cur + " " + w).strip()
-            if draw.textlength(trial, font=font) <= box_w:
-                cur = trial
-            else:
-                lines.append(cur)
-                cur = w
-        if cur:
-            lines.append(cur)
         line_h = int(size * 1.25)
+        # Wrap with the narrowest line width, then refine: the block is
+        # centred, so the outermost lines set the limit. Iterate twice
+        # (line count <-> width converge immediately in practice).
+        limit = box_w
+        lines = []
+        for _ in range(3):
+            words, lines, cur = text.split(), [], ""
+            for w in words:
+                trial = (cur + " " + w).strip()
+                if draw.textlength(trial, font=font) <= limit:
+                    cur = trial
+                else:
+                    lines.append(cur)
+                    cur = w
+            if cur:
+                lines.append(cur)
+            if bubble is None:
+                break
+            n = len(lines)
+            outer_dy = ((n - 1) / 2.0) * line_h
+            new_limit = _ellipse_line_width(bubble[2], bubble[3],
+                                            outer_dy, pad)
+            if abs(new_limit - limit) < 1:
+                break
+            limit = new_limit
         if len(lines) * line_h <= box_h:
             return font, lines, line_h
     font = _load_font(font_path, min_size, rtl=rtl)
@@ -71,7 +99,8 @@ def whiten_and_typeset(image_path, bubbles, translations, out_path,
         # 2. Fit + draw translated text, centred.
         pad = max(6, int(min(w, h) * 0.08))
         font, lines, line_h = _fit_font(
-            draw, text, w - 2 * pad, h - 2 * pad, font_path, rtl=rtl
+            draw, text, w - 2 * pad, h - 2 * pad, font_path, rtl=rtl,
+            bubble=(x, y, w, h), pad=pad
         )
         total_h = len(lines) * line_h
         cy = y + (h - total_h) // 2
