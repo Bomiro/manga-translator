@@ -8,6 +8,7 @@ Usage:
   python3 agent_translate.py --file bubbles.json   (reads [{"text": ...}])
 """
 import argparse
+import gc
 import json
 import os
 
@@ -31,6 +32,15 @@ def _load():
     _model = MarianMTModel.from_pretrained(path)
     _model.eval()
     return _model, _tok
+
+
+def unload():
+    """Free the model from RAM (VM memory is tight; the Arabic chain loads
+    a second model after this one)."""
+    global _model, _tok
+    _model = None
+    _tok = None
+    gc.collect()
 
 
 def translate(text, src="ja", dest="en"):
