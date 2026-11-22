@@ -35,6 +35,18 @@ page.png
   (2026-11-22) and had to be reinstalled (`sudo apt-get install -y
   tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng`). System packages do
   not survive VM replacement.
+  **Durable tesseract (2026-11-22 ~17:20): .debs extracted to ~/tesseract/
+  (binary + libs + tessdata); detect.py prefers it and sets
+  TESSDATA_PREFIX (must point AT the tessdata dir) + LD_LIBRARY_PATH.
+  The home copy ALSO lost a dep after another replacement (libgif.so.7) —
+  extracted libgif7's .deb into ~/tesseract too; ldd shows 0 missing now.**
+- **Complex test page (2026-11-22 ~17:45):** `make_test_page_complex.py`
+  draws 3 panels / 8 bubbles (small bubble, long sentences, tight fits).
+  EN + AR pipelines: **8/8 correct**. Typesetting fits text to the
+  ELLIPSE, not the rectangle (`_ellipse_line_width` in typeset.py) —
+  before the fix, multi-line text crossed the outline at the top/bottom
+  lines. Lesson: test-page text must fit INSIDE its bubble, or edge
+  glyphs get eaten by the outline on the OCR side too.
 
 ## Arabic (pivot chain, added 2026-11-22)
 
