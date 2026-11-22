@@ -11,12 +11,23 @@ import numpy as np
 import cv2
 
 DEFAULT_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+ARABIC_FONT = "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf"
 
 
-def _fit_font(draw, text, box_w, box_h, font_path, max_size=48, min_size=10):
+def _load_font(font_path, size, rtl=False):
+    """RAQM layout engine when rtl: PIL then shapes Arabic letters and
+    orders the text right-to-left by itself (no reshaper needed)."""
+    if rtl:
+        return ImageFont.truetype(font_path, size,
+                                  layout_engine=ImageFont.Layout.RAQM)
+    return ImageFont.truetype(font_path, size)
+
+
+def _fit_font(draw, text, box_w, box_h, font_path, max_size=48, min_size=10,
+              rtl=False):
     """Largest font size where the wrapped text fits inside (box_w, box_h)."""
     for size in range(max_size, min_size - 1, -2):
-        font = ImageFont.truetype(font_path, size)
+        font = _load_font(font_path, size, rtl=rtl)
         words, lines, cur = text.split(), [], ""
         for w in words:
             trial = (cur + " " + w).strip()
@@ -30,12 +41,12 @@ def _fit_font(draw, text, box_w, box_h, font_path, max_size=48, min_size=10):
         line_h = int(size * 1.25)
         if len(lines) * line_h <= box_h:
             return font, lines, line_h
-    font = ImageFont.truetype(font_path, min_size)
+    font = _load_font(font_path, min_size, rtl=rtl)
     return font, [text], int(min_size * 1.25)
 
 
 def whiten_and_typeset(image_path, bubbles, translations, out_path,
-                       font_path=DEFAULT_FONT):
+                       font_path=DEFAULT_FONT, rtl=False):
     """bubbles: list of dicts with bbox (x,y,w,h) and optional 'mask' (np array).
     translations: list of strings, same order. Returns out_path."""
     img = Image.open(image_path).convert("RGB")
@@ -60,7 +71,7 @@ def whiten_and_typeset(image_path, bubbles, translations, out_path,
         # 2. Fit + draw translated text, centred.
         pad = max(6, int(min(w, h) * 0.08))
         font, lines, line_h = _fit_font(
-            draw, text, w - 2 * pad, h - 2 * pad, font_path
+            draw, text, w - 2 * pad, h - 2 * pad, font_path, rtl=rtl
         )
         total_h = len(lines) * line_h
         cy = y + (h - total_h) // 2
