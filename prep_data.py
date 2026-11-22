@@ -8,7 +8,7 @@ import random
 import json
 
 random.seed(42)
-OUT = "/home/hatch/workspace/manga-translator/data"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
 def clean(ja, en):
