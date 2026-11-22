@@ -18,12 +18,37 @@ page.png
 - **Base:** Helsinki-NLP/opus-mt-ja-en (MarianMT, 74M params)
 - **Fine-tune data:** 10,000 short conversational JA–EN pairs from OPUS-100
   (movie subtitles — short dialogue, like manga speech), 1 epoch, lr 2e-5
-- **Trained on:** CPU in the dev VM (no GPU), ~2.5 h
+- **Trained on:** free Colab GPU (Tesla T4), 2 min for 313 steps — CPU
+  training on the dev VM is NOT viable (dies silently, out of memory).
 - **Model dir:** `model-manga-ja-en/` (weights + tokenizer)
 - **Eval:** `python3 eval.py` — sacreBLEU on 200 held-out pairs, base vs tuned
-  (numbers filled in after the first training run)
+  - Colab T4 run (2026-11-22, 10k pairs, 1 epoch, 313 steps, train_loss 3.888,
+    eval_loss 1.764): **BASE 19.54 / TUNED 19.90** — a small gain (+0.36).
+    Test sentences are nearly identical between base and tuned (only
+    «まさか、そんなはずはない。» differs: base "No way. That can't be true."
+    vs tuned "No, it can't be."). Honest verdict: the fine-tune helped a
+    little; the base model was already strong on this subtitle-style data.
+  - **End-to-end (verified on this VM 2026-11-22):** `pipeline.py` on
+    `test-page-neo.png` — 4/4 bubbles, OCR conf 79.6–94.2, translations
+    correct, output `test-page-neo-en.png` QA'd visually.
+  NOTE: tesseract is an apt package — it VANISHED when the VM was replaced
+  (2026-11-22) and had to be reinstalled (`sudo apt-get install -y
+  tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng`). System packages do
+  not survive VM replacement.
 
-## Usage
+## Arabic (pivot chain, added 2026-11-22)
+
+No direct JA→AR training — instead a chain, his pick (option 2, better than
+direct training because EN→AR is a high-resource pair with a strong model):
+`agent_translate_ar.py` — ja→en with the trained model, unload it, then
+en→ar with Helsinki opus-mt-en-ar (`model-en-ar/`, downloaded from HF on
+first use). One model in RAM at a time (VM memory is tight).
+`pipeline.py page.png --dest ar` — typesets with Noto Sans Arabic + PIL
+RAQM (letters join, RTL, no reshaper needed).
+Verified end-to-end 2026-11-22 on `test-page-neo.png` → `test-page-neo-ar.png`:
+مرحباً! / كيف حالك؟ / دعونا نذهب! / إنه يوم لطيف (4/4, OCR 79.6–94.2).
+Quirk fixed: the en→ar model mirrors a final '!' to the front
+('! مرحباً!') — `_clean_ar()` drops the duplicate.
 
 ```bash
 # whole page (needs the venv: cv2 + torch live there)
