@@ -5,13 +5,15 @@ Prints sacreBLEU for both models + side-by-side test sentences.
 """
 import argparse
 import json
+import os
 
 import sacrebleu
 from transformers import MarianMTModel, MarianTokenizer
 
+HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = "Helsinki-NLP/opus-mt-ja-en"
-TUNED = "/home/hatch/workspace/manga-translator/model-manga-ja-en"
-DATA = "/home/hatch/workspace/manga-translator/data/val.jsonl"
+TUNED = os.path.join(HERE, "model-manga-ja-en")
+DATA = os.path.join(HERE, "data", "val.jsonl")
 
 TESTS = ["こんにちは！", "元気ですか？", "今日はいい天気だ。",
          "行こう！", "あの箱を開けてはいけない。",
