@@ -25,22 +25,44 @@ def run(image_path, src="ja", dest="en", out_path=None):
     bubbles = detect_bubbles(image_path)
     results = []
     translations = []
-    for i, b in enumerate(bubbles):
+
+    # OCR every bubble first (Arabic uses a batch chain: all ja->en, then
+    # all en->ar, so the two models are never in RAM at the same time).
+    originals = []
+    confs = []
+    for b in bubbles:
         ocr = ocr_bubble(image_path, b["bbox"])
-        original = (ocr.get("text") or "").strip()
-        trans, engine = translate(original, src=src, dest=dest) if original else ("", "none")
-        translations.append(trans)
+        originals.append((ocr.get("text") or "").strip())
+        confs.append(round(float(ocr.get("conf", 0)), 1))
+
+    if dest == "ar":
+        from agent_translate_ar import translate_many
+        pairs = translate_many(originals)
+        translations = [p[0] for p in pairs]
+        engines = [p[1] for p in pairs]
+    else:
+        engines = []
+        for original in originals:
+            trans, engine = translate(original, src=src, dest=dest) \
+                if original else ("", "none")
+            translations.append(trans)
+            engines.append(engine)
+
+    for i, b in enumerate(bubbles):
         results.append({
             "bubble": i + 1,
             "bbox": [int(v) for v in b["bbox"]],
-            "original": original,
-            "ocr_conf": round(float(ocr.get("conf", 0)), 1),
-            "translated": trans,
-            "engine": engine,
+            "original": originals[i],
+            "ocr_conf": confs[i],
+            "translated": translations[i],
+            "engine": engines[i],
         })
-        print(f"[{i+1}] {original!r} -> {trans!r} ({engine})")
+        print(f"[{i+1}] {originals[i]!r} -> {translations[i]!r} ({engines[i]})")
 
-    whiten_and_typeset(image_path, bubbles, translations, out_path)
+    from typeset import ARABIC_FONT, DEFAULT_FONT
+    whiten_and_typeset(image_path, bubbles, translations, out_path,
+                       font_path=ARABIC_FONT if dest == "ar" else DEFAULT_FONT,
+                       rtl=(dest == "ar"))
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     print(f"Saved: {out_path} + {json_path} ({len(bubbles)} bubbles)")
