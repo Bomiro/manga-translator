@@ -15,12 +15,33 @@ Usage:
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 
 import cv2
 import numpy as np
+
+# Tesseract lives in ~/tesseract (extracted .debs) because apt installs do
+# NOT survive VM replacement. Prefer it; fall back to the system binary.
+_HOME_TESS = os.path.expanduser("~/tesseract/usr/bin/tesseract")
+
+
+def _tesseract_bin():
+    if os.path.isfile(_HOME_TESS):
+        return _HOME_TESS
+    return shutil.which("tesseract")
+
+
+def _tesseract_env():
+    env = dict(os.environ)
+    if os.path.isfile(_HOME_TESS):
+        home = os.path.expanduser("~/tesseract")
+        env["TESSDATA_PREFIX"] = home + "/usr/share/tesseract-ocr/5/tessdata"
+        env["LD_LIBRARY_PATH"] = (home + "/usr/lib/x86_64-linux-gnu:"
+                                  + env.get("LD_LIBRARY_PATH", ""))
+    return env
 
 # --- detection tuning -------------------------------------------------------
 WHITE_THRESH = 240      # gray value above this counts as "white" (bubble
@@ -139,8 +160,9 @@ def _reading_order(bubbles):
 def _tesseract_tsv(png_bytes, lang):
     """Run tesseract on PNG bytes, return (text, mean_word_conf)."""
     proc = subprocess.run(
-        ["tesseract", "stdin", "stdout", "--psm", "6", "-l", lang, "tsv"],
-        input=png_bytes, capture_output=True, timeout=60)
+        [_tesseract_bin(), "stdin", "stdout", "--psm", "6", "-l", lang, "tsv"],
+        input=png_bytes, capture_output=True, timeout=60,
+        env=_tesseract_env())
     text_parts, confs = [], []
     for line in proc.stdout.decode("utf-8", errors="ignore").splitlines()[1:]:
         fields = line.split("\t")
@@ -170,7 +192,7 @@ def ocr_bubble(image, bbox):
     `jpn+eng` when confidence is low or nothing was read. Empty text when
     tesseract is missing or the bubble holds no readable text.
     """
-    if shutil.which("tesseract") is None:
+    if _tesseract_bin() is None:
         return {"text": "", "conf": 0.0}
     if isinstance(image, str):
         gray = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
